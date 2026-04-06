@@ -10,18 +10,33 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1. Checkout code
       - name: Checkout
         uses: actions/checkout@v3
 
+      # 2. Login to DockerHub
       - name: Docker Login
         run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
 
+      # 3. Build Docker Image
       - name: Build Image
         run: docker build -t ${{ secrets.DOCKER_IMAGE }}:latest .
 
+      # 4. Push Image
       - name: Push Image
         run: docker push ${{ secrets.DOCKER_IMAGE }}:latest
 
+      # 5. Copy YAML files to EC2
+      - name: Copy files to EC2
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "deployment.yaml,service.yaml"
+          target: "~/app"
+
+      # 6. Deploy to Kubernetes
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.0.0
         with:
@@ -29,6 +44,5 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            cd ~/project
-            kubectl apply -f deployment.yaml
-            kubectl apply -f service.yaml
+            kubectl apply -f ~/app/deployment.yaml
+            kubectl apply -f ~/app/service.yaml
